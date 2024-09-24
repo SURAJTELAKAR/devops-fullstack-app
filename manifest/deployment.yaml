@@ -1,86 +1,14 @@
 apiVersion: v1
-kind: Secret
+kind: Namespace
 metadata:
-  name: db-credentials
-  namespace: prod
-type: Opaque
-data:
-  username: dXNlcm5hbWU=  # base64 for "username"
-  password: cGFzc3dvcmQ=  # base64 for "password"
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend
-  namespace: prod
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: backend
-  template:
-    metadata:
-      labels:
-        app: backend
-    spec:
-      containers:
-      - name: backend
-        image: surajtelakar/backend:latest
-        ports:
-        - containerPort: 8080
-        env:
-        - name: DB_HOST
-          value: "db.example.com"  # Dummy host
-        - name: DB_PORT
-          value: "5432"            # Default PostgreSQL port
-        - name: DB_NAME
-          value: "mydb"            # Dummy DB name
-        - name: DB_USER
-          valueFrom:
-            secretKeyRef:
-              name: db-credentials
-              key: username
-        - name: DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: db-credentials
-              key: password
-      - name: postgres
-        image: postgres:latest     # PostgreSQL image
-        ports:
-        - containerPort: 5432
-        env:
-        - name: POSTGRES_DB
-          value: "mydb"            # Dummy DB name
-        - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: db-credentials
-              key: username
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: db-credentials
-              key: password
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend
-  namespace: prod
-spec:
-  type: NodePort
-  ports:
-    - port: 8080
-      nodePort: 30001
-  selector:
-    app: backend
+  name: devops-app
+
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
-  namespace: prod
+  namespace: devops-app
 spec:
   replicas: 1
   selector:
@@ -92,20 +20,116 @@ spec:
         app: frontend
     spec:
       containers:
-      - name: frontend
-        image: surajtelakar/frontend:latest
-        ports:
-        - containerPort: 3000
+        - name: frontend
+          image: frontend-image:latest  # Replace with your actual image
+          ports:
+            - containerPort: 3000
+          env:
+            - name: API_URL
+              value: http://backend:8080
+
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend
-  namespace: prod
+  namespace: devops-app
 spec:
   type: NodePort
   ports:
     - port: 3000
-      nodePort: 30002
+      targetPort: 3000
   selector:
     app: frontend
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: devops-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: backend-image:latest  # Replace with your actual image
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: EMS-postgres
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: EMS
+            - name: DB_USER
+              value: EMS
+            - name: DB_PASSWORD
+              value: EMS
+            - name: ALLOWED_ORIGINS
+              value: gorunmain.go
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: devops-app
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: backend
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  namespace: devops-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      containers:
+        - name: db
+          image: postgres:9.6-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: EMS
+            - name: POSTGRES_USER
+              value: EMS
+            - name: POSTGRES_PASSWORD
+              value: EMS
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: devops-app
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: db
